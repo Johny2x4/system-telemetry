@@ -1,68 +1,63 @@
-# System Telemetry & Monitoring Agent
 
-A cross-platform, zero-dependency telemetry service designed to collect deep system hardware metrics and aggregate them into a centralized SQLite database for Grafana visualization. 
+# 🚀 System Telemetry & Monitoring Agent
 
-Built entirely in Go, this tool compiles down into a single executable. It features an interactive CLI setup wizard, automatic background service daemonization, and specialized tracking for dedicated GPU VRAM and compute utilization—making it ideal for monitoring physical automation nodes and local AI model hosting environments.
+A high-performance, zero-dependency telemetry suite built in Go. This tool aggregates hardware metrics from across your fleet into a centralized SQLite database, optimized for real-time Grafana dashboards.
 
 ## ✨ Key Features
-* **Dual-Mode Architecture:** Run the executable as a lightweight Client Agent to poll hardware, or as a Server Aggregator to ingest data via a REST API.
-* **Zero-Setup Database:** The Server mode automatically initializes a local SQLite database (`telemetry.db`) with a background task that prunes data older than 30 days. No Docker or external DB engine required.
-* **NVIDIA NVML Integration:** Natively interfaces with NVIDIA drivers to extract highly accurate VRAM saturation, core compute utilization, and thermal metrics.
-* **Cross-Platform Daemonization:** Automatically installs itself into the host's native service manager (Windows Services, Linux `systemd`, or macOS `launchd`) to run silently on boot.
-* **Grafana Ready:** The SQLite database file acts as a direct, plug-and-play data source for Grafana dashboards.
-
-## 📊 Metrics Collected
-* **Host Identity:** OS details, Hostname, IPv4/IPv6 Addresses, and MAC Addresses.
-* **Compute:** CPU Model, Global/Per-Core Utilization (%), and Core Temperatures.
-* **Memory:** Total RAM Capacity, Used Capacity (GB), and Utilization (%).
-* **Storage:** Physical Drive Mount Points, File System Types, and Capacity/Utilization per drive.
-* **Network I/O:** Live Bytes Received/Transmitted per active interface.
-* **Accelerators (GPU):** Hardware Name, Dedicated VRAM Total/Used (GB), VRAM Utilization (%), Core Compute Utilization (%), and Core Temperatures.
+* **Zero-Config Database:** Uses an embedded SQLite backend (`modernc.org/sqlite`). No external database installation or Docker containers required.
+* **Interactive Setup:** A built-in CLI wizard configures the node as a **Client** or **Server** on the first run.
+* **Daemonization:** Natively installs as a background service on **Windows (Services)**, **Linux (systemd)**, and **macOS (launchd)**.
+* **Smart Self-Monitoring:** Server nodes automatically monitor their own hardware while simultaneously ingesting data from remote clients.
+* **High-Resolution Polling:** Supports intervals as low as **5 seconds** for tracking intensive AI/rendering workloads.
+* **Automatic Data Retention:** Includes a background vacuum that prunes data older than 30 days to keep the database lean.
 
 ---
 
-## 🚀 Installation & Compilation
+## 🛠️ Installation & Build
 
-Because this project uses conditional build tags to handle CGO requirements for the NVIDIA driver, you must compile the binary specifically for your target environment.
-
-### 1. Windows (Client or Server)
-Compile directly from PowerShell. This build will utilize WMI/standard OS polling.
+### 1. Compile for Windows
 ```powershell
+$env:GOOS="windows"; $env:GOARCH="amd64"
 go build -o telemetry.exe ./cmd/telemetry/main.go
 ```
 
-### 2. Linux (Basic Server / No GPU)
-If deploying to a standard Linux server that simply needs to aggregate data or monitor basic OS stats, cross-compile from Windows:
-```powershell
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o telemetry-linux ./cmd/telemetry/main.go
-```
-
-### 3. Linux (AI/GPU Node)
-To enable the NVIDIA NVML bindings for deep GPU tracking, you **must** compile from within a Linux environment (like WSL2 or directly on the target machine).
+### 2. Compile for Linux (With NVIDIA GPU Tracking)
+*Must be compiled on a Linux machine or WSL2 to enable NVML bindings.*
 ```bash
-go build -o telemetry-gpu ./cmd/telemetry/main.go
+go build -o telemetry ./cmd/telemetry/main.go
 ```
 
 ---
 
-## ⚙️ Usage & Configuration
+## ⚙️ Usage
 
-### Step 1: Initialization
-Execute the compiled binary for the first time. It will detect that no configuration exists and launch the interactive setup wizard.
-```bash
-./telemetry
+### Initialization
+Simply run the executable. The **Setup Wizard** will guide you through role assignment and networking.
+```powershell
+./telemetry.exe
 ```
-* **Server Mode:** It will prompt you for an API listening port and a database filename.
-* **Client Mode:** It will prompt you for the HTTP URL of your Server Aggregator (e.g., `http://192.168.1.50:8080`).
 
-### Step 2: Background Service Installation
-Once configured, use the built-in CLI commands to install the application into your operating system's background service manager. Note: Run your terminal as an Administrator / `sudo`.
-
-```bash
-# Install the background service
-./telemetry install
-
-# Start the service
-./telemetry start
+### Managing the Background Service
+Run these commands from an **Administrator/Sudo** terminal to manage the daemon:
+```powershell
+./telemetry.exe install    # Register with the OS service manager
+./telemetry.exe start      # Start background collection
+./telemetry.exe stop       # Stop the service
+./telemetry.exe uninstall  # Remove from the OS
 ```
-*To stop or uninstall, simply replace `start` with `stop` or `uninstall`.*
+
+### Reconfiguring
+Need to change the polling interval or the Server IP? Use the reconfiguration flag:
+```powershell
+./telemetry.exe reconfigure
+```
+
+---
+
+## 🔒 Networking & Firewalls
+For Clients to reach the Server, ensure the Server has an inbound rule for your chosen port (default `8080`).
+
+**Windows Server Firewall Rule:**
+```powershell
+New-NetFirewallRule -DisplayName "Telemetry" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow -Profile Any
+```
