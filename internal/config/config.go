@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/spf13/viper"
@@ -9,10 +10,11 @@ import (
 
 // AppConfig holds the settings saved in config.yaml
 type AppConfig struct {
-	Role       string `mapstructure:"role"`        // "Client" or "Server"
-	ServerURL  string `mapstructure:"server_url"`  // Used by Client to know where to send data
-	ListenPort string `mapstructure:"listen_port"` // Used by Server to open the API port
-	DBPath     string `mapstructure:"db_path"`     // Used by Server for SQLite
+	Role            string `mapstructure:"role"`
+	ServerURL       string `mapstructure:"server_url"`
+	ListenPort      string `mapstructure:"listen_port"`
+	DBPath          string `mapstructure:"db_path"`
+	PollingInterval int    `mapstructure:"polling_interval"`
 }
 
 // LoadOrSetup reads the config file, or triggers the wizard if it's missing
@@ -24,7 +26,7 @@ func LoadOrSetup() (*AppConfig, error) {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			fmt.Println("No configuration found. Initializing Setup Wizard...")
-			return runSetupWizard()
+			return RunSetupWizard()
 		}
 		return nil, err
 	}
@@ -34,8 +36,9 @@ func LoadOrSetup() (*AppConfig, error) {
 	return &cfg, err
 }
 
-// runSetupWizard interactively asks the user how to configure the node
-func runSetupWizard() (*AppConfig, error) {
+// RunSetupWizard interactively asks the user how to configure the node.
+// It is exported (capitalized) so we can force it via the CLI.
+func RunSetupWizard() (*AppConfig, error) {
 	var cfg AppConfig
 
 	// 1. Ask for the Role
@@ -57,7 +60,7 @@ func runSetupWizard() (*AppConfig, error) {
 			Default: "8080",
 		}
 		survey.AskOne(promptPort, &cfg.ListenPort)
-		
+
 		promptDB := &survey.Input{
 			Message: "Enter the filename for the SQLite database:",
 			Default: "telemetry.db",
@@ -65,13 +68,39 @@ func runSetupWizard() (*AppConfig, error) {
 		survey.AskOne(promptDB, &cfg.DBPath)
 	}
 
-	// 3. Save to config.yaml
+	// 3. Ask for Polling Interval
+	promptInterval := &survey.Input{
+		Message: "Enter the hardware polling interval in seconds (minimum 5):",
+		Default: "10",
+	}
+	
+	var intervalStr string
+	survey.AskOne(promptInterval, &intervalStr, survey.WithValidator(func(val interface{}) error {
+		str, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("invalid input")
+		}
+		i, err := strconv.Atoi(str)
+		if err != nil {
+			return fmt.Errorf("please enter a valid number")
+		}
+		if i < 5 {
+			return fmt.Errorf("polling interval must be at least 5 seconds to prevent system strain")
+		}
+		return nil
+	}))
+	
+	cfg.PollingInterval, _ = strconv.Atoi(intervalStr)
+
+	// 4. Save to config.yaml
 	viper.Set("role", cfg.Role)
 	viper.Set("server_url", cfg.ServerURL)
 	viper.Set("listen_port", cfg.ListenPort)
 	viper.Set("db_path", cfg.DBPath)
+	viper.Set("polling_interval", cfg.PollingInterval)
 
-	if err := viper.SafeWriteConfig(); err != nil {
+	// THE FIX: Use WriteConfigAs to explicitly set the path and force an overwrite
+	if err := viper.WriteConfigAs("config.yaml"); err != nil {
 		return nil, fmt.Errorf("failed to save config.yaml: %w", err)
 	}
 
