@@ -1,0 +1,13 @@
+# Compiled executables
+*.exe
+*.app
+telemetry-mac-*
+telemetry-linux-*
+
+# Local databases and configs
+telemetry.db
+config.yaml
+
+# OS specific files
+.DS_Store
+Thumbs.db
